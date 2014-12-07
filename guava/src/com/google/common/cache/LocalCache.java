@@ -2350,6 +2350,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
           throw new InvalidCacheLoadException("CacheLoader returned null for key " + key + ".");
         }
         statsCounter.recordLoadSuccess(loadingValueReference.elapsedNanos());
+        // todo if false, re-get
         storeLoadedValue(key, hash, loadingValueReference, value);
         return value;
       } finally {
@@ -3088,7 +3089,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
               cause = RemovalCause.COLLECTED;
             } else {
               // currently loading
-              return null;
+              cause = RemovalCause.EXPLICIT;
             }
 
             ++modCount;
@@ -3151,17 +3152,11 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             // the loaded value was already clobbered
             valueReference = new WeightedStrongValueReference<K, V>(newValue, 0);
             enqueueNotification(key, hash, valueReference, RemovalCause.REPLACED);
-            return false;
+            return true;
           }
         }
 
-        ++modCount;
-        ReferenceEntry<K, V> newEntry = newEntry(key, hash, first);
-        setValue(newEntry, key, newValue, now);
-        table.set(index, newEntry);
-        this.count = newCount; // write-volatile
-        evictEntries();
-        return true;
+        return false;
       } finally {
         unlock();
         postWriteCleanup();
@@ -3248,16 +3243,15 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     ReferenceEntry<K, V> removeValueFromChain(ReferenceEntry<K, V> first,
         ReferenceEntry<K, V> entry, @Nullable K key, int hash, ValueReference<K, V> valueReference,
         RemovalCause cause) {
-      enqueueNotification(key, hash, valueReference, cause);
+      if (!valueReference.isLoading()) {
+        enqueueNotification(key, hash, valueReference, cause);
+      } else {
+        valueReference.notifyNewValue(null);
+      }
       writeQueue.remove(entry);
       accessQueue.remove(entry);
 
-      if (valueReference.isLoading()) {
-        valueReference.notifyNewValue(null);
-        return first;
-      } else {
-        return removeEntryFromChain(first, entry);
-      }
+      return removeEntryFromChain(first, entry);
     }
 
     @GuardedBy("this")

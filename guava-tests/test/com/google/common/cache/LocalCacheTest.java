@@ -1291,6 +1291,7 @@ public class LocalCacheTest extends TestCase {
 
     // clobbered
     Object value2 = new Object();
+    // todo fix
     assertFalse(segment.storeLoadedValue(key, hash, valueRef, value2));
     assertEquals(1, segment.count);
     assertSame(value, segment.get(key, hash));

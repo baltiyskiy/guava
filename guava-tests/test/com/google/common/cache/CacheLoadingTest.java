@@ -2254,9 +2254,13 @@ public class CacheLoadingTest extends TestCase {
     checkNothingLogged();
 
     // results should be visible
+    // todo ?
     assertEquals(2, cache.size());
     assertEquals(getKey + suffix + 1, map.get(getKey));
     assertEquals(refreshKey + suffix + 1, map.get(refreshKey));
+
+    assertEquals(getKey + suffix + 1, cache.get(getKey));
+    assertEquals(refreshKey + suffix + 1, cache.get(refreshKey));
     assertEquals(2, cache.size());
   }
 
