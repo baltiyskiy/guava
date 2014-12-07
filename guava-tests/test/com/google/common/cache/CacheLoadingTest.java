@@ -51,6 +51,9 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -2205,13 +2208,15 @@ public class CacheLoadingTest extends TestCase {
     final String getKey = "get";
     final String refreshKey = "refresh";
     final String suffix = "Suffix";
+    final AtomicInteger value = new AtomicInteger(0);
 
     CacheLoader<String, String> computeFunction = new CacheLoader<String, String>() {
       @Override
       public String load(String key) throws InterruptedException {
         computationStarted.countDown();
+        String v = key + suffix + value.get();
         letGetFinishSignal.await();
-        return key + suffix;
+        return v;
       }
     };
 
@@ -2236,8 +2241,10 @@ public class CacheLoadingTest extends TestCase {
     }.start();
 
     computationStarted.await();
+    // todo invalidateAll
     cache.invalidate(getKey);
     cache.invalidate(refreshKey);
+    value.incrementAndGet();
     assertFalse(map.containsKey(getKey));
     assertFalse(map.containsKey(refreshKey));
 
@@ -2248,8 +2255,8 @@ public class CacheLoadingTest extends TestCase {
 
     // results should be visible
     assertEquals(2, cache.size());
-    assertEquals(getKey + suffix, map.get(getKey));
-    assertEquals(refreshKey + suffix, map.get(refreshKey));
+    assertEquals(getKey + suffix + 1, map.get(getKey));
+    assertEquals(refreshKey + suffix + 1, map.get(refreshKey));
     assertEquals(2, cache.size());
   }
 
@@ -2262,13 +2269,15 @@ public class CacheLoadingTest extends TestCase {
     final String getKey = "get";
     final String refreshKey = "refresh";
     final String suffix = "Suffix";
+    final AtomicInteger value = new AtomicInteger(0);
 
     CacheLoader<String, String> computeFunction = new CacheLoader<String, String>() {
       @Override
       public String load(String key) throws InterruptedException {
         computationStarted.countDown();
+        String v = key + suffix + value.get();
         letGetFinishSignal.await();
-        return key + suffix;
+        return v;
       }
     };
 
@@ -2293,10 +2302,12 @@ public class CacheLoadingTest extends TestCase {
     }.start();
 
     computationStarted.await();
+    // todo invalidateAll()
     cache.invalidate(getKey);
     cache.invalidate(refreshKey);
     assertFalse(map.containsKey(getKey));
     assertFalse(map.containsKey(refreshKey));
+    value.incrementAndGet();
 
     // start new computations
     new Thread() {
@@ -2321,8 +2332,8 @@ public class CacheLoadingTest extends TestCase {
 
     // results should be visible
     assertEquals(2, cache.size());
-    assertEquals(getKey + suffix, map.get(getKey));
-    assertEquals(refreshKey + suffix, map.get(refreshKey));
+    assertEquals(getKey + suffix + 1, map.get(getKey));
+    assertEquals(refreshKey + suffix + 1, map.get(refreshKey));
   }
 
   public void testExpandDuringLoading() throws InterruptedException {
@@ -2498,6 +2509,42 @@ public class CacheLoadingTest extends TestCase {
     assertEquals(key, result.get(0));
     assertEquals(key, result.get(1));
     assertEquals(key + suffix, cache.getUnchecked(key));
+  }
+
+  public void testConcurrentInvalidatesAndGets() throws InterruptedException, ExecutionException {
+    final int nThreads = 7;
+    final int nTasks = 100000;
+
+    final AtomicInteger value = new AtomicInteger(0);
+    CacheLoader<Integer, Integer> loader = new CacheLoader<Integer, Integer>() {
+      @Override
+      public Integer load(Integer key) {
+        return value.get();
+      }
+    };
+    final LoadingCache<Integer, Integer> cache = CacheBuilder.newBuilder().build(loader);
+    ExecutorService executor = Executors.newFixedThreadPool(nThreads);
+    ExecutorCompletionService<Void> service = new ExecutorCompletionService<Void>(executor);
+
+    Callable<Void> task = new Callable<Void>() {
+      @Override
+      public Void call() throws Exception {
+        int newValue = value.incrementAndGet();
+        // todo invalidateAll()
+        cache.invalidate(42);
+        int actualValue = cache.get(42);
+        // todo assertLess?
+        assertTrue(newValue + " <= " + actualValue, newValue <= actualValue);
+        return null;
+      }
+    };
+
+    for (int i = 0; i < nTasks; ++i) {
+      service.submit(task);
+    }
+    for (int i = 0; i < nTasks; ++i) {
+      service.take().get();
+    }
   }
 
   static <T> Callable<T> throwing(final Exception exception) {

@@ -419,47 +419,4 @@ public class LocalLoadingCacheTest extends TestCase {
     service.shutdown();
 
   }
-
-  /*public void testConcurrentInvalidatesAndGets() {
-    final int nThreads = 7;
-    final int nTasks = 100000;
-
-    final AtomicInteger value = new AtomicInteger(0);
-    CacheLoader<Integer, Integer> loader = new CacheLoader<Integer, Integer>() {
-      @Override
-      public Integer load(Integer key) {
-        return value.get();
-      }
-    };
-    final LoadingCache<Integer, Integer> cache = makeCache(
-        CacheBuilder.newBuilder(), loader);
-    executor = Executors.newFixedThreadPool(nThreads)
-    def service = new ExecutorCompletionService(executor)
-    def task = {
-      def newValue = value.incrementAndGet();
-    if (invalidate == "invalidateAll()") {
-      cache.invalidateAll()
-    } else {
-      cache.invalidate(0)
-    }
-    log.trace("invalidate, value = $newValue")
-    log.trace("get <")
-    def actualValue = cache.get(0)
-    log.trace("get > $actualValue")
-      [newValue, actualValue]
-    } as Callable
-
-    expect:
-    (1..nTasks).each{ service.submit(task) }
-    (1..nTasks).each{
-      def (newValue, actualValue) = service.take().get()
-      assert newValue <= actualValue
-    }
-
-    where:
-    nTasks = 100000
-    nThreads = 7
-    invalidate << ["invalidateAll()", "invalidate(0)"]
-
-  }*/
 }
