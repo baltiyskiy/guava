@@ -1263,6 +1263,7 @@ public class LocalCacheTest extends TestCase {
     }
   }
 
+  // todo fix this test - it expects wrong things
   public void testSegmentStoreComputedValue() {
     QueuingRemovalListener<Object, Object> listener = queuingRemovalListener();
     LocalCache<Object, Object> map = makeLocalCache(createCacheBuilder()
@@ -1279,19 +1280,20 @@ public class LocalCacheTest extends TestCase {
     LoadingValueReference<Object, Object> valueRef = new LoadingValueReference<Object, Object>();
     entry.setValueReference(valueRef);
 
-    // absent
+    // absent - when the computations starts, a loading reference is put,
+    // so absence means concurrent invalidation
     Object value = new Object();
     assertTrue(listener.isEmpty());
     assertEquals(0, segment.count);
     assertNull(segment.get(key, hash));
-    assertTrue(segment.storeLoadedValue(key, hash, valueRef, value));
-    assertSame(value, segment.get(key, hash));
-    assertEquals(1, segment.count);
-    assertTrue(listener.isEmpty());
+    assertFalse(segment.storeLoadedValue(key, hash, valueRef, value));
+    assertNull(segment.get(key, hash));
+    assertEquals(0, segment.count);
+    assertFalse(listener.isEmpty());
+    listener.clear();
 
     // clobbered
     Object value2 = new Object();
-    // todo fix
     assertFalse(segment.storeLoadedValue(key, hash, valueRef, value2));
     assertEquals(1, segment.count);
     assertSame(value, segment.get(key, hash));

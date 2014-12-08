@@ -2328,7 +2328,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             @Override
             public void run() {
               try {
-                V newValue = getAndRecordStats(key, hash, loadingValueReference, loadingFuture);
+                getAndRecordStats(key, hash, loadingValueReference, loadingFuture);
               } catch (Throwable t) {
                 logger.log(Level.WARNING, "Exception thrown during refresh", t);
                 loadingValueReference.setException(t);
@@ -2350,7 +2350,6 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
           throw new InvalidCacheLoadException("CacheLoader returned null for key " + key + ".");
         }
         statsCounter.recordLoadSuccess(loadingValueReference.elapsedNanos());
-        // todo if false, re-get
         storeLoadedValue(key, hash, loadingValueReference, value);
         return value;
       } finally {
@@ -3134,6 +3133,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             V entryValue = valueReference.get();
             // replace the old LoadingValueReference if it's live, otherwise
             // perform a putIfAbsent
+            // todo test case that covers the second alternative in IF
             if (oldValueReference == valueReference
                 || (entryValue == null && valueReference != UNSET)) {
               ++modCount;
@@ -3152,10 +3152,16 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             // the loaded value was already clobbered
             valueReference = new WeightedStrongValueReference<K, V>(newValue, 0);
             enqueueNotification(key, hash, valueReference, RemovalCause.REPLACED);
-            return true;
+            return false;
           }
         }
 
+        // the entry is not in the cache -- it must have been concurrently invalidated,
+        // so we don't store stale value
+        WeightedStrongValueReference<K, V> loadedValueReference =
+          new WeightedStrongValueReference<K, V>(newValue, 0);
+        // todo test this notification
+        enqueueNotification(key, hash, loadedValueReference, RemovalCause.EXPLICIT);
         return false;
       } finally {
         unlock();
@@ -3169,7 +3175,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
         long now = map.ticker.read();
         preWriteCleanup(now);
 
-        int newCount = this.count - 1;
+        int newCount;
         AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
         int index = hash & (table.length() - 1);
         ReferenceEntry<K, V> first = table.get(index);
