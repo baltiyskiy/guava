@@ -2253,12 +2253,12 @@ public class CacheLoadingTest extends TestCase {
     getFinishedSignal.await();
     checkNothingLogged();
 
-    // results should be visible
-    // todo ?
-    assertEquals(2, cache.size());
-    assertEquals(getKey + suffix + 1, map.get(getKey));
-    assertEquals(refreshKey + suffix + 1, map.get(refreshKey));
+    // map is empty
+    assertEquals(0, map.size());
+    assertNull(map.get(getKey));
+    assertNull(map.get(refreshKey));
 
+    // cache retrieves new values
     assertEquals(getKey + suffix + 1, cache.get(getKey));
     assertEquals(refreshKey + suffix + 1, cache.get(refreshKey));
     assertEquals(2, cache.size());
@@ -2334,10 +2334,15 @@ public class CacheLoadingTest extends TestCase {
     getFinishedSignal.await();
     checkNothingLogged();
 
-    // results should be visible
-    assertEquals(2, cache.size());
+    // map is empty
+    assertEquals(2, map.size());
     assertEquals(getKey + suffix + 1, map.get(getKey));
     assertEquals(refreshKey + suffix + 1, map.get(refreshKey));
+
+    assertEquals(2, cache.size());
+    assertEquals(getKey + suffix + 1, cache.get(getKey));
+    assertEquals(refreshKey + suffix + 1, cache.get(refreshKey));
+    assertEquals(2, cache.size());
   }
 
   public void testExpandDuringLoading() throws InterruptedException {

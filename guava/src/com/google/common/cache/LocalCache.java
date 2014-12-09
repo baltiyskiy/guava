@@ -3087,8 +3087,15 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             } else if (valueReference.isActive()) {
               cause = RemovalCause.COLLECTED;
             } else {
-              // currently loading
-              cause = RemovalCause.EXPLICIT;
+              // currently loading - remove the loading reference
+              // since the loading value is not visible in isEmpty() and containsValue(),
+              // todo check isEmpty and remove loading value
+              // don't change modCount
+              ReferenceEntry<K, V> newFirst = removeValueFromChain(
+                first, e, entryKey, hash, valueReference, RemovalCause.EXPLICIT);
+              // also, don't change count - it's increased only when the loaded value is set
+              table.set(index, newFirst);
+              return null;
             }
 
             ++modCount;
