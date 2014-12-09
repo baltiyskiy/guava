@@ -1263,7 +1263,6 @@ public class LocalCacheTest extends TestCase {
     }
   }
 
-  // todo fix this test - it expects wrong things
   public void testSegmentStoreComputedValue() {
     QueuingRemovalListener<Object, Object> listener = queuingRemovalListener();
     LocalCache<Object, Object> map = makeLocalCache(createCacheBuilder()
@@ -1289,18 +1288,27 @@ public class LocalCacheTest extends TestCase {
     assertFalse(segment.storeLoadedValue(key, hash, valueRef, value));
     assertNull(segment.get(key, hash));
     assertEquals(0, segment.count);
-    assertFalse(listener.isEmpty());
+    // the value is reported as removed
+    checkNotification(listener, key, value, RemovalCause.EXPLICIT);
     listener.clear();
+
+    valueRef = segment.insertLoadingValueReference(key, hash, false);
+    assertNotNull(valueRef);
+    //
+    assertTrue(listener.isEmpty());
+    assertEquals(0, segment.count);
+    assertNull(segment.get(key, hash));
+    assertTrue(segment.storeLoadedValue(key, hash, valueRef, value));
+    assertSame(value, segment.get(key, hash));
+    assertEquals(1, segment.count);
+    assertTrue(listener.isEmpty());
 
     // clobbered
     Object value2 = new Object();
     assertFalse(segment.storeLoadedValue(key, hash, valueRef, value2));
     assertEquals(1, segment.count);
     assertSame(value, segment.get(key, hash));
-    RemovalNotification<Object, Object> notification = listener.remove();
-    assertEquals(immutableEntry(key, value2), notification);
-    assertEquals(RemovalCause.REPLACED, notification.getCause());
-    assertTrue(listener.isEmpty());
+    checkNotification(listener, key, value2, RemovalCause.REPLACED);
 
     // inactive
     Object value3 = new Object();
@@ -1324,10 +1332,7 @@ public class LocalCacheTest extends TestCase {
     assertTrue(segment.storeLoadedValue(key, hash, valueRef, value4));
     assertSame(value4, segment.get(key, hash));
     assertEquals(1, segment.count);
-    notification = listener.remove();
-    assertEquals(immutableEntry(key, value3), notification);
-    assertEquals(RemovalCause.REPLACED, notification.getCause());
-    assertTrue(listener.isEmpty());
+    checkNotification(listener, key, value3, RemovalCause.REPLACED);
 
     // collected
     entry.setValueReference(valueRef);
@@ -1338,9 +1343,14 @@ public class LocalCacheTest extends TestCase {
     assertTrue(segment.storeLoadedValue(key, hash, valueRef, value4));
     assertSame(value4, segment.get(key, hash));
     assertEquals(1, segment.count);
-    notification = listener.remove();
-    assertEquals(immutableEntry(key, null), notification);
-    assertEquals(RemovalCause.COLLECTED, notification.getCause());
+    checkNotification(listener, key, null, RemovalCause.COLLECTED);
+  }
+
+  private void checkNotification(QueuingRemovalListener<Object, Object> listener, Object key,
+      Object value, RemovalCause cause) {
+    RemovalNotification<Object, Object> notification = listener.remove();
+    assertEquals(immutableEntry(key, value), notification);
+    assertEquals(cause, notification.getCause());
     assertTrue(listener.isEmpty());
   }
 

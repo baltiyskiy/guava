@@ -2404,7 +2404,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     @Nullable
     LoadingValueReference<K, V> insertLoadingValueReference(final K key, final int hash,
         boolean checkTime) {
-      ReferenceEntry<K, V> e = null;
+      ReferenceEntry<K, V> e;
       lock();
       try {
         long now = map.ticker.read();
