@@ -3141,8 +3141,8 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             // replace the old LoadingValueReference if it's live, otherwise
             // perform a putIfAbsent
             // todo test case that covers the second alternative in IF
-            if (oldValueReference == valueReference
-                || (entryValue == null && valueReference != UNSET)) {
+            if (oldValueReference == valueReference) {
+              logger.warning("[" + Thread.currentThread().getName() + "] slv " + oldValueReference + " " + valueReference + " " + entryValue);
               ++modCount;
               if (oldValueReference.isActive()) {
                 RemovalCause cause =
@@ -3165,7 +3165,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
 
         // the entry is not in the cache -- it must have been concurrently invalidated,
         // so we don't store stale value
-        WeightedStrongValueReference<K, V> loadedValueReference =
+        ValueReference<K, V> loadedValueReference =
           new WeightedStrongValueReference<K, V>(newValue, 0);
         // todo test this notification
         enqueueNotification(key, hash, loadedValueReference, RemovalCause.EXPLICIT);

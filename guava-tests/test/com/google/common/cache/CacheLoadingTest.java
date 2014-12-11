@@ -2278,9 +2278,10 @@ public class CacheLoadingTest extends TestCase {
     CacheLoader<String, String> computeFunction = new CacheLoader<String, String>() {
       @Override
       public String load(String key) throws InterruptedException {
-        computationStarted.countDown();
         String v = key + suffix + value.get();
+        computationStarted.countDown();
         letGetFinishSignal.await();
+        LocalCache.logger.warning("[" + Thread.currentThread().getName() + "] load > " + v);
         return v;
       }
     };
@@ -2290,14 +2291,16 @@ public class CacheLoadingTest extends TestCase {
     ConcurrentMap<String,String> map = cache.asMap();
     map.put(refreshKey, refreshKey);
 
-    new Thread() {
+    new Thread("get1") {
       @Override
       public void run() {
-        cache.getUnchecked(getKey);
+        LocalCache.logger.warning("[get1] get <");
+        String r = cache.getUnchecked(getKey);
+        LocalCache.logger.warning("[get1] get > " + r);
         getFinishedSignal.countDown();
       }
     }.start();
-    new Thread() {
+    new Thread("refresh1") {
       @Override
       public void run() {
         cache.refresh(refreshKey);
@@ -2314,14 +2317,16 @@ public class CacheLoadingTest extends TestCase {
     value.incrementAndGet();
 
     // start new computations
-    new Thread() {
+    new Thread("get2") {
       @Override
       public void run() {
-        cache.getUnchecked(getKey);
+        LocalCache.logger.warning("[get2] get <");
+        String r = cache.getUnchecked(getKey);
+        LocalCache.logger.warning("[get2] get > " + r);
         getFinishedSignal.countDown();
       }
     }.start();
-    new Thread() {
+    new Thread("refresh2") {
       @Override
       public void run() {
         cache.refresh(refreshKey);
@@ -2332,7 +2337,7 @@ public class CacheLoadingTest extends TestCase {
     // let computation complete
     letGetFinishSignal.countDown();
     getFinishedSignal.await();
-    checkNothingLogged();
+//    checkNothingLogged();
 
     // map is empty
     assertEquals(2, map.size());
