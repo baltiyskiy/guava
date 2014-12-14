@@ -2200,21 +2200,28 @@ public class CacheLoadingTest extends TestCase {
     assertEquals(refreshKey + suffix, map.get(refreshKey));
   }
 
-  public void testInvalidateDuringLoading() throws InterruptedException, ExecutionException {
+  public void testInvalidateDuringLoading() throws Exception {
+    testInvalidateDuringLoading(false);
+  }
+
+  public void testInvalidateAllDuringLoading() throws Exception {
+    testInvalidateDuringLoading(true);
+  }
+
+  private void testInvalidateDuringLoading(boolean invalidateAll) throws Exception {
     // computation starts; invalidate() is called on the key being computed, computation finishes
     final CountDownLatch computationStarted = new CountDownLatch(2);
     final CountDownLatch letGetFinishSignal = new CountDownLatch(1);
     final CountDownLatch getFinishedSignal = new CountDownLatch(2);
     final String getKey = "get";
     final String refreshKey = "refresh";
-    final String suffix = "Suffix";
     final AtomicInteger value = new AtomicInteger(0);
 
     CacheLoader<String, String> computeFunction = new CacheLoader<String, String>() {
       @Override
       public String load(String key) throws InterruptedException {
+        String v = key + value.get();
         computationStarted.countDown();
-        String v = key + suffix + value.get();
         letGetFinishSignal.await();
         return v;
       }
@@ -2241,9 +2248,12 @@ public class CacheLoadingTest extends TestCase {
     }.start();
 
     computationStarted.await();
-    // todo invalidateAll
-    cache.invalidate(getKey);
-    cache.invalidate(refreshKey);
+    if (invalidateAll) {
+      cache.invalidateAll();
+    } else {
+      cache.invalidate(getKey);
+      cache.invalidate(refreshKey);
+    }
     value.incrementAndGet();
     assertFalse(map.containsKey(getKey));
     assertFalse(map.containsKey(refreshKey));
@@ -2259,29 +2269,34 @@ public class CacheLoadingTest extends TestCase {
     assertNull(map.get(refreshKey));
 
     // cache retrieves new values
-    assertEquals(getKey + suffix + 1, cache.get(getKey));
-    assertEquals(refreshKey + suffix + 1, cache.get(refreshKey));
+    assertEquals(getKey + 1, cache.get(getKey));
+    assertEquals(refreshKey + 1, cache.get(refreshKey));
     assertEquals(2, cache.size());
   }
 
-  public void testInvalidateAndReloadDuringLoading()
-      throws InterruptedException, ExecutionException {
+  public void testInvalidateAndReloadDuringLoading() throws Exception {
+    testInvalidateAndReloadDuringLoading(false);
+  }
+
+  public void testInvalidateAllAndReloadDuringLoading() throws Exception {
+    testInvalidateAndReloadDuringLoading(true);
+  }
+
+  private void testInvalidateAndReloadDuringLoading(boolean invalidateAll) throws Exception {
     // computation starts; clear() is called, computation finishes
     final CountDownLatch computationStarted = new CountDownLatch(2);
     final CountDownLatch letGetFinishSignal = new CountDownLatch(1);
     final CountDownLatch getFinishedSignal = new CountDownLatch(4);
     final String getKey = "get";
     final String refreshKey = "refresh";
-    final String suffix = "Suffix";
     final AtomicInteger value = new AtomicInteger(0);
 
     CacheLoader<String, String> computeFunction = new CacheLoader<String, String>() {
       @Override
       public String load(String key) throws InterruptedException {
-        String v = key + suffix + value.get();
+        String v = key + value.get();
         computationStarted.countDown();
         letGetFinishSignal.await();
-        LocalCache.logger.warning("[" + Thread.currentThread().getName() + "] load > " + v);
         return v;
       }
     };
@@ -2294,9 +2309,7 @@ public class CacheLoadingTest extends TestCase {
     new Thread("get1") {
       @Override
       public void run() {
-        LocalCache.logger.warning("[get1] get <");
-        String r = cache.getUnchecked(getKey);
-        LocalCache.logger.warning("[get1] get > " + r);
+        cache.getUnchecked(getKey);
         getFinishedSignal.countDown();
       }
     }.start();
@@ -2309,9 +2322,12 @@ public class CacheLoadingTest extends TestCase {
     }.start();
 
     computationStarted.await();
-    // todo invalidateAll()
-    cache.invalidate(getKey);
-    cache.invalidate(refreshKey);
+    if (invalidateAll) {
+      cache.invalidateAll();
+    } else {
+      cache.invalidate(getKey);
+      cache.invalidate(refreshKey);
+    }
     assertFalse(map.containsKey(getKey));
     assertFalse(map.containsKey(refreshKey));
     value.incrementAndGet();
@@ -2320,9 +2336,7 @@ public class CacheLoadingTest extends TestCase {
     new Thread("get2") {
       @Override
       public void run() {
-        LocalCache.logger.warning("[get2] get <");
-        String r = cache.getUnchecked(getKey);
-        LocalCache.logger.warning("[get2] get > " + r);
+        cache.getUnchecked(getKey);
         getFinishedSignal.countDown();
       }
     }.start();
@@ -2337,16 +2351,16 @@ public class CacheLoadingTest extends TestCase {
     // let computation complete
     letGetFinishSignal.countDown();
     getFinishedSignal.await();
-//    checkNothingLogged();
+    checkNothingLogged();
 
-    // map is empty
+    // The values have been put to the map
     assertEquals(2, map.size());
-    assertEquals(getKey + suffix + 1, map.get(getKey));
-    assertEquals(refreshKey + suffix + 1, map.get(refreshKey));
+    assertEquals(getKey + 1, map.get(getKey));
+    assertEquals(refreshKey + 1, map.get(refreshKey));
 
     assertEquals(2, cache.size());
-    assertEquals(getKey + suffix + 1, cache.get(getKey));
-    assertEquals(refreshKey + suffix + 1, cache.get(refreshKey));
+    assertEquals(getKey + 1, cache.get(getKey));
+    assertEquals(refreshKey + 1, cache.get(refreshKey));
     assertEquals(2, cache.size());
   }
 
@@ -2525,7 +2539,15 @@ public class CacheLoadingTest extends TestCase {
     assertEquals(key + suffix, cache.getUnchecked(key));
   }
 
-  public void testConcurrentInvalidatesAndGets() throws InterruptedException, ExecutionException {
+  public void testConcurrentInvalidatesAndGets() throws Exception {
+    testConcurrentInvalidatesAndGets(false);
+  }
+
+  public void testConcurrentInvalidateAllAndGets() throws Exception {
+    testConcurrentInvalidatesAndGets(true);
+  }
+
+  private void testConcurrentInvalidatesAndGets(final boolean invalidateAll) throws Exception {
     final int nThreads = 7;
     final int nTasks = 100000;
 
@@ -2544,10 +2566,12 @@ public class CacheLoadingTest extends TestCase {
       @Override
       public Void call() throws Exception {
         int newValue = value.incrementAndGet();
-        // todo invalidateAll()
-        cache.invalidate(42);
+        if (invalidateAll) {
+          cache.invalidateAll();
+        } else {
+          cache.invalidate(42);
+        }
         int actualValue = cache.get(42);
-        // todo assertLess?
         assertTrue(newValue + " <= " + actualValue, newValue <= actualValue);
         return null;
       }

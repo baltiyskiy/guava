@@ -64,7 +64,6 @@ import java.util.AbstractSet;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.Set;
@@ -3142,7 +3141,6 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             // perform a putIfAbsent
             // todo test case that covers the second alternative in IF
             if (oldValueReference == valueReference) {
-              logger.warning("[" + Thread.currentThread().getName() + "] slv " + oldValueReference + " " + valueReference + " " + entryValue);
               ++modCount;
               if (oldValueReference.isActive()) {
                 RemovalCause cause =
@@ -3222,32 +3220,34 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
     }
 
     void clear() {
-      if (count != 0) { // read-volatile
-        lock();
-        try {
-          AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
-          for (int i = 0; i < table.length(); ++i) {
-            for (ReferenceEntry<K, V> e = table.get(i); e != null; e = e.getNext()) {
-              // Loading references aren't actually in the map yet.
-              if (e.getValueReference().isActive()) {
-                enqueueNotification(e, RemovalCause.EXPLICIT);
-              }
+      // todo we must clear loading references as well, so we can't check `this.count == 0`
+      // todo   how can we quickly check that there are no entries, live or loading?
+      // todo   we can have a maintenance operation that would check this and, if it's true,
+      // todo   CAS a special "EMPTY" reference to this.table.
+      lock();
+      try {
+        AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
+        for (int i = 0; i < table.length(); ++i) {
+          for (ReferenceEntry<K, V> e = table.get(i); e != null; e = e.getNext()) {
+            // Loading references aren't actually in the map yet.
+            if (e.getValueReference().isActive()) {
+              enqueueNotification(e, RemovalCause.EXPLICIT);
             }
           }
-          for (int i = 0; i < table.length(); ++i) {
-            table.set(i, null);
-          }
-          clearReferenceQueues();
-          writeQueue.clear();
-          accessQueue.clear();
-          readCount.set(0);
-
-          ++modCount;
-          count = 0; // write-volatile
-        } finally {
-          unlock();
-          postWriteCleanup();
         }
+        for (int i = 0; i < table.length(); ++i) {
+          table.set(i, null);
+        }
+        clearReferenceQueues();
+        writeQueue.clear();
+        accessQueue.clear();
+        readCount.set(0);
+
+        ++modCount;
+        count = 0; // write-volatile
+      } finally {
+        unlock();
+        postWriteCleanup();
       }
     }
 

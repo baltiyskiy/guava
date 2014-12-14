@@ -1275,26 +1275,27 @@ public class LocalCacheTest extends TestCase {
     AtomicReferenceArray<ReferenceEntry<Object, Object>> table = segment.table;
     int index = hash & (table.length() - 1);
 
-    DummyEntry<Object, Object> entry = DummyEntry.create(key, hash, null);
-    LoadingValueReference<Object, Object> valueRef = new LoadingValueReference<Object, Object>();
-    entry.setValueReference(valueRef);
-
     // absent - when the computations starts, a loading reference is put,
     // so absence means concurrent invalidation
     Object value = new Object();
     assertTrue(listener.isEmpty());
     assertEquals(0, segment.count);
     assertNull(segment.get(key, hash));
-    assertFalse(segment.storeLoadedValue(key, hash, valueRef, value));
+    assertFalse(segment.storeLoadedValue(key, hash, new LoadingValueReference<Object, Object>(),
+        value));
     assertNull(segment.get(key, hash));
     assertEquals(0, segment.count);
-    // the value is reported as removed
+    // the value is reported as removed here, not when invalidate() was called
     checkNotification(listener, key, value, RemovalCause.EXPLICIT);
-    listener.clear();
 
-    valueRef = segment.insertLoadingValueReference(key, hash, false);
+    // "start" the computation
+    LoadingValueReference<Object, Object> valueRef =
+        segment.insertLoadingValueReference(key, hash, false);
     assertNotNull(valueRef);
-    //
+    DummyEntry<Object, Object> entry = DummyEntry.create(key, hash, null);
+    entry.setValueReference(valueRef);
+
+    // the value is successfully loaded
     assertTrue(listener.isEmpty());
     assertEquals(0, segment.count);
     assertNull(segment.get(key, hash));
