@@ -32,16 +32,9 @@ import junit.framework.TestCase;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -50,7 +43,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class LocalLoadingCacheTest extends TestCase {
 
   private static <K, V> LocalLoadingCache<K, V> makeCache(
-      CacheBuilder<? super K, ? super V> builder, CacheLoader<? super K, V> loader) {
+      CacheBuilder<K, V> builder, CacheLoader<? super K, V> loader) {
     return new LocalLoadingCache<K, V>(builder, loader);
   }
 
@@ -346,7 +339,7 @@ public class LocalLoadingCacheTest extends TestCase {
         .build(recursiveLoader);
     cacheRef.set(recursiveCache);
 
-    // tells the test when the compution has completed
+    // tells the test when the computation has completed
     final CountDownLatch doneSignal = new CountDownLatch(1);
 
     Thread thread = new Thread() {
@@ -373,50 +366,5 @@ public class LocalLoadingCacheTest extends TestCase {
       }
       fail(builder.toString());
     }
-  }
-
-  public void testConcurrentLoadInvalidate_key() throws Exception {
-    checkConcurrentLoadInvalidate(true);
-  }
-
-  public void testConcurrentLoadInvalidate_all() throws Exception {
-    checkConcurrentLoadInvalidate(false);
-  }
-
-  private void checkConcurrentLoadInvalidate(boolean invalidateKey)
-    throws Exception {
-    final AtomicInteger value = new AtomicInteger(0);
-    final CountDownLatch loaderStartedWait = new CountDownLatch(1);
-    final CountDownLatch afterLoadDelay = new CountDownLatch(1);
-    CacheLoader<Integer, Integer> loader = new CacheLoader<Integer, Integer>() {
-      @Override
-      public Integer load(Integer key) throws Exception {
-        Integer v = value.get();
-        loaderStartedWait.countDown();
-        afterLoadDelay.await();
-        return v;
-      }
-    };
-    final LoadingCache<Integer, Integer> cache = makeCache(
-      CacheBuilder.newBuilder(), loader);
-    ExecutorService service = Executors.newSingleThreadExecutor();
-    Future<Integer> t = service.submit(new Callable<Integer>() {
-      @Override
-      public Integer call() throws Exception {
-        return cache.get(42);
-      }
-    });
-
-    loaderStartedWait.await();
-    int newValue = value.incrementAndGet();
-    cache.invalidate(42);
-    afterLoadDelay.countDown();
-    int oldValue = t.get();
-    assertEquals(0, oldValue);
-    int actualNewValue = cache.get(42);
-    assertEquals(newValue, actualNewValue);
-
-    service.shutdown();
-
   }
 }

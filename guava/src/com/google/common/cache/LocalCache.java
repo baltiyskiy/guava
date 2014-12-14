@@ -3139,10 +3139,10 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
             V entryValue = valueReference.get();
             // replace the old LoadingValueReference if it's live, otherwise
             // perform a putIfAbsent
-            // todo test case that covers the second alternative in IF
             if (oldValueReference == valueReference) {
               ++modCount;
               if (oldValueReference.isActive()) {
+                // todo can collected really be here?
                 RemovalCause cause =
                     (entryValue == null) ? RemovalCause.COLLECTED : RemovalCause.REPLACED;
                 enqueueNotification(key, hash, oldValueReference, cause);
@@ -3259,6 +3259,7 @@ class LocalCache<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> 
       if (!valueReference.isLoading()) {
         enqueueNotification(key, hash, valueReference, cause);
       } else {
+        // todo test in case when oldValue != UNSET the influence of this notification
         valueReference.notifyNewValue(null);
       }
       writeQueue.remove(entry);

@@ -2200,11 +2200,11 @@ public class CacheLoadingTest extends TestCase {
     assertEquals(refreshKey + suffix, map.get(refreshKey));
   }
 
-  public void testInvalidateDuringLoading() throws Exception {
+  public void testInvalidateDuringLoading_key() throws Exception {
     testInvalidateDuringLoading(false);
   }
 
-  public void testInvalidateAllDuringLoading() throws Exception {
+  public void testInvalidateDuringLoading_all() throws Exception {
     testInvalidateDuringLoading(true);
   }
 
@@ -2274,11 +2274,11 @@ public class CacheLoadingTest extends TestCase {
     assertEquals(2, cache.size());
   }
 
-  public void testInvalidateAndReloadDuringLoading() throws Exception {
+  public void testInvalidateAndReloadDuringLoading_key() throws Exception {
     testInvalidateAndReloadDuringLoading(false);
   }
 
-  public void testInvalidateAllAndReloadDuringLoading() throws Exception {
+  public void testInvalidateAndReloadDuringLoading_all() throws Exception {
     testInvalidateAndReloadDuringLoading(true);
   }
 
@@ -2306,14 +2306,14 @@ public class CacheLoadingTest extends TestCase {
     ConcurrentMap<String,String> map = cache.asMap();
     map.put(refreshKey, refreshKey);
 
-    new Thread("get1") {
+    new Thread() {
       @Override
       public void run() {
         cache.getUnchecked(getKey);
         getFinishedSignal.countDown();
       }
     }.start();
-    new Thread("refresh1") {
+    new Thread() {
       @Override
       public void run() {
         cache.refresh(refreshKey);
@@ -2333,14 +2333,14 @@ public class CacheLoadingTest extends TestCase {
     value.incrementAndGet();
 
     // start new computations
-    new Thread("get2") {
+    new Thread() {
       @Override
       public void run() {
         cache.getUnchecked(getKey);
         getFinishedSignal.countDown();
       }
     }.start();
-    new Thread("refresh2") {
+    new Thread() {
       @Override
       public void run() {
         cache.refresh(refreshKey);
@@ -2539,11 +2539,11 @@ public class CacheLoadingTest extends TestCase {
     assertEquals(key + suffix, cache.getUnchecked(key));
   }
 
-  public void testConcurrentInvalidatesAndGets() throws Exception {
+  public void testConcurrentInvalidatesAndGets_key() throws Exception {
     testConcurrentInvalidatesAndGets(false);
   }
 
-  public void testConcurrentInvalidateAllAndGets() throws Exception {
+  public void testConcurrentInvalidatesAndGets_all() throws Exception {
     testConcurrentInvalidatesAndGets(true);
   }
 
