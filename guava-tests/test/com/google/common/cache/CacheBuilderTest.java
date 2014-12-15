@@ -437,7 +437,7 @@ public class CacheBuilderTest extends TestCase {
     assertEquals("a", notification.getKey());
     assertEquals("a", notification.getValue());
     assertEquals(1, cache.size());
-    assertEquals("b", cache.getUnchecked("b"));
+    assertEquals("b", cache.asMap().get("b"));
   }
 
   // "Basher tests", where we throw a bunch of stuff at a LoadingCache and check basic invariants.

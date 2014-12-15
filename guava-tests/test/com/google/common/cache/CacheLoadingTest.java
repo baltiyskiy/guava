@@ -54,6 +54,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -2272,6 +2273,49 @@ public class CacheLoadingTest extends TestCase {
     assertEquals(getKey + 1, cache.get(getKey));
     assertEquals(refreshKey + 1, cache.get(refreshKey));
     assertEquals(2, cache.size());
+  }
+
+  public void testInvalidateWhileLoadingTwoThreads() throws Exception {
+    final AtomicInteger value = new AtomicInteger(0);
+
+    final CountDownLatch computationStarted = new CountDownLatch(1);
+    final CountDownLatch letComputationFinish = new CountDownLatch(1);
+    CacheLoader<Integer, Integer> loader = new CacheLoader<Integer, Integer>() {
+      @Override
+      public Integer load(Integer key) throws Exception {
+        int v = value.get();
+        computationStarted.countDown();
+        letComputationFinish.await();
+        return v;
+      }
+    };
+    final LoadingCache<Integer, Integer> cache = CacheBuilder.newBuilder().build(loader);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    Callable<Integer> t1 = new Callable<Integer>() {
+      @Override
+      public Integer call() throws Exception {
+        return cache.get(42);
+      }
+    };
+    Callable<Integer> t2 = new Callable<Integer>() {
+      @Override
+      public Integer call() throws Exception {
+        computationStarted.await();
+        return cache.get(42);
+      }
+    };
+
+    Future<Integer> f1 = executor.submit(t1);
+    Future<Integer> f2 = executor.submit(t2);
+    computationStarted.await();
+    value.incrementAndGet();
+    cache.invalidate(42);
+    letComputationFinish.countDown();
+
+    assertEquals(0, f1.get().intValue());
+    assertEquals(0, f2.get().intValue());
+    assertEquals(1, cache.get(42).intValue());
   }
 
   public void testInvalidateAndReloadDuringLoading_key() throws Exception {
