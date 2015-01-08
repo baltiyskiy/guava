@@ -2290,7 +2290,11 @@ public class CacheLoadingTest extends TestCase {
         return v;
       }
     };
-    final LoadingCache<Integer, Integer> cache = CacheBuilder.newBuilder().build(loader);
+    // ensure there is only one segment
+    CacheBuilder<Object, Object> builder = CacheBuilder.newBuilder().concurrencyLevel(1);
+    final LocalCache.LocalLoadingCache<Integer, Integer> cache =
+        new LocalCache.LocalLoadingCache<Integer, Integer>(builder, loader);
+    // ensure segment count is not zero (so that the second thread does not todo DO IT?
     ExecutorService executor = Executors.newFixedThreadPool(2);
 
     Callable<Integer> t1 = new Callable<Integer>() {
@@ -2303,9 +2307,13 @@ public class CacheLoadingTest extends TestCase {
       @Override
       public Integer call() throws Exception {
         computationStarted.await();
-        Integer v = cache.get(42);
-        letInvalidate.countDown();
-        return v;
+        onWaitForValue(cache.localCache, 42, new Runnable() {
+          @Override
+          public void run() {
+            letInvalidate.countDown();
+          }
+        });
+        return cache.get(42);
       }
     };
 
@@ -2323,6 +2331,23 @@ public class CacheLoadingTest extends TestCase {
     // todo  letInvalidate.countDown() in get()
     assertTrue(v2 + " should be 0 or 1", v2 == 0 || v2 == 1);
     assertEquals(1, cache.get(42).intValue());
+  }
+
+  private void onWaitForValue(LocalCache<Integer, Integer> cache, Integer key,
+      final Runnable r) {
+    int hash = cache.hash(key);
+    LocalCache.ReferenceEntry<Integer, Integer> entry = cache.segmentFor(hash)
+        .getEntry(hash, key);
+    LocalCache.LoadingValueReference valueRef =
+        (LocalCache.LoadingValueReference) entry.getValueReference();
+    entry.setValueReference(new LocalCache.LoadingValueReference<Integer, Integer>(
+        valueRef.oldValue) {
+      @Override
+      public Integer waitForValue() throws ExecutionException {
+        r.run();
+        return super.waitForValue();
+      }
+    });
   }
 
   public void testInvalidateAndReloadDuringLoading_key() throws Exception {
