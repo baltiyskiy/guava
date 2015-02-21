@@ -2325,11 +2325,7 @@ public class CacheLoadingTest extends TestCase {
     letComputationFinish.countDown();
 
     assertEquals(0, f1.get().intValue());
-    int v2 = f2.get();
-    // todo WRONG invalidation should happen after T2 begins waiting for value
-    // todo  in T2, before GET stub the future in the cache entry with the one that does
-    // todo  letInvalidate.countDown() in get()
-    assertTrue(v2 + " should be 0 or 1", v2 == 0 || v2 == 1);
+    assertEquals(0, f2.get().intValue());
     assertEquals(1, cache.get(42).intValue());
   }
 
@@ -2337,15 +2333,15 @@ public class CacheLoadingTest extends TestCase {
       final Runnable r) {
     int hash = cache.hash(key);
     LocalCache.ReferenceEntry<Integer, Integer> entry = cache.segmentFor(hash)
-        .getEntry(hash, key);
-    LocalCache.LoadingValueReference valueRef =
+        .getEntry(key, hash);
+    final LocalCache.LoadingValueReference valueRef =
         (LocalCache.LoadingValueReference) entry.getValueReference();
     entry.setValueReference(new LocalCache.LoadingValueReference<Integer, Integer>(
         valueRef.oldValue) {
       @Override
       public Integer waitForValue() throws ExecutionException {
         r.run();
-        return super.waitForValue();
+        return (Integer)valueRef.waitForValue();
       }
     });
   }
