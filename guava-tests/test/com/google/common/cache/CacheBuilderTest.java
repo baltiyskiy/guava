@@ -387,8 +387,7 @@ public class CacheBuilderTest extends TestCase {
   @GwtIncompatible("QueuingRemovalListener")
 
   public void testRemovalNotification_clear() throws InterruptedException {
-    // If a clear() happens while a computation is pending, we should not get a removal
-    // notification.
+    // If a clear() happens while a computation is pending, we should get a removal notification.
 
     final AtomicBoolean shouldWait = new AtomicBoolean(false);
     final CountDownLatch computingLatch = new CountDownLatch(1);
@@ -429,19 +428,21 @@ public class CacheBuilderTest extends TestCase {
     // don't check cache.size() until we know the get("b") call is complete
     computationComplete.await();
 
-    // At this point, the listener should be holding the seed value (a -> a), and the map should
-    // contain the computed value (b -> b), since the clear() happened before the computation
-    // completed.
-    assertEquals(1, listener.size());
+    // invalidateAll() clears both the existing value (a) and the value being loaded (b)
+    assertEquals(2, listener.size());
     RemovalNotification<String, String> notification = listener.remove();
     assertEquals("a", notification.getKey());
     assertEquals("a", notification.getValue());
-    assertEquals(1, cache.size());
-    assertEquals("b", cache.asMap().get("b"));
+    notification = listener.remove();
+    assertEquals("b", notification.getKey());
+    assertEquals("b", notification.getValue());
+    assertEquals(0, cache.size());
+    assertEquals("b", cache.getUnchecked("b"));
   }
 
   // "Basher tests", where we throw a bunch of stuff at a LoadingCache and check basic invariants.
 
+  // todo fix
   /**
    * This is a less carefully-controlled version of {@link #testRemovalNotification_clear} - this is
    * a black-box test that tries to create lots of different thread-interleavings, and asserts that
