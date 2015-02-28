@@ -457,11 +457,12 @@ public class CacheBuilderTest extends TestCase {
   // "Basher tests", where we throw a bunch of stuff at a LoadingCache and check basic invariants.
 
   /**
-   * This is a less carefully-controlled version of {@link #testRemovalNotification_clear_loadedAndLoading()} - this is
-   * a black-box test that tries to create lots of different thread-interleavings, and asserts that
-   * each computation is affected by a call to {@code clear()} (and therefore gets passed to the
-   * removal listener), or else is not affected by the {@code clear()} (and therefore exists in the
-   * cache afterward).
+   * This is a less carefully-controlled version of
+   * {@link #testRemovalNotification_clear_loadedAndLoading()} - this is a black-box test
+   * that tries to create lots of different thread-interleavings, and asserts that
+   * each computation is affected by a call to {@code clear()}
+   * (and therefore gets passed to the removal listener), or else is not affected by the
+   * {@code clear()} (and therefore exists in the cache afterwards).
    */
   @GwtIncompatible("QueuingRemovalListener")
   public void testRemovalNotification_clear_basher() throws InterruptedException {
