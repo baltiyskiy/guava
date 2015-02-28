@@ -456,21 +456,21 @@ public class CacheBuilderTest extends TestCase {
 
   // "Basher tests", where we throw a bunch of stuff at a LoadingCache and check basic invariants.
 
-  // todo fix
   /**
-   * This is a less carefully-controlled version of {@link #testRemovalNotification_clear} - this is
+   * This is a less carefully-controlled version of {@link #testRemovalNotification_clear_loadedAndLoading()} - this is
    * a black-box test that tries to create lots of different thread-interleavings, and asserts that
    * each computation is affected by a call to {@code clear()} (and therefore gets passed to the
    * removal listener), or else is not affected by the {@code clear()} (and therefore exists in the
    * cache afterward).
    */
   @GwtIncompatible("QueuingRemovalListener")
-
   public void testRemovalNotification_clear_basher() throws InterruptedException {
     // If a clear() happens close to the end of computation, one of two things should happen:
     // - computation ends first: the removal listener is called, and the cache does not contain the
     //   key/value pair
-    // - clear() happens first: the removal listener is not called, and the cache contains the pair
+    // - clear() happens first: when the computation ends, removal listener is called.
+    // If clear() happens before the computation started, the cache contains the pair and
+    // there's no removal notification.
     AtomicBoolean computationShouldWait = new AtomicBoolean();
     CountDownLatch computationLatch = new CountDownLatch(1);
     QueuingRemovalListener<String, String> listener = queuingRemovalListener();
@@ -484,8 +484,7 @@ public class CacheBuilderTest extends TestCase {
     int nTasks = 1000;
     int nSeededEntries = 100;
     Set<String> expectedKeys = Sets.newHashSetWithExpectedSize(nTasks + nSeededEntries);
-    // seed the map, so its segments have a count>0; otherwise, clear() won't visit the in-progress
-    // entries
+    // seed the map so that it surely contains fully loaded entries
     for (int i = 0; i < nSeededEntries; i++) {
       String s = "b" + i;
       cache.getUnchecked(s);
@@ -519,6 +518,8 @@ public class CacheBuilderTest extends TestCase {
     // Check all of the removal notifications we received: they should have had correctly-associated
     // keys and values. (An earlier bug saw removal notifications for in-progress computations,
     // which had real keys with null values.)
+    // UPD: this stands even after #1881, because when computation finishes,
+    // the removal notification must be fired and contain the key and the freshly loaded value.
     Map<String, String> removalNotifications = Maps.newHashMap();
     for (RemovalNotification<String, String> notification : listener) {
       removalNotifications.put(notification.getKey(), notification.getValue());
@@ -534,6 +535,7 @@ public class CacheBuilderTest extends TestCase {
 
     // Each of the values added to the map should either still be there, or have seen a removal
     // notification.
+    // UPD: this stands even after #1881.
     assertEquals(expectedKeys, Sets.union(cache.asMap().keySet(), removalNotifications.keySet()));
     assertTrue(Sets.intersection(cache.asMap().keySet(), removalNotifications.keySet()).isEmpty());
   }
@@ -543,7 +545,6 @@ public class CacheBuilderTest extends TestCase {
    * (removed because of size limits or expiration) trigger appropriate removal notifications.
    */
   @GwtIncompatible("QueuingRemovalListener")
-
   public void testRemovalNotification_get_basher() throws InterruptedException {
     int nTasks = 1000;
     int nThreads = 100;
