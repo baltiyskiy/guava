@@ -385,15 +385,29 @@ public class CacheBuilderTest extends TestCase {
   }
 
   @GwtIncompatible("QueuingRemovalListener")
+  public void testRemovalNotification_clear_loadedAndLoading() throws InterruptedException {
+    // clear() results in notification for both the loaded value and the value being
+    // loaded.
+    testRemovalNotification_clear_0(true);
+  }
 
-  public void testRemovalNotification_clear() throws InterruptedException {
-    // If a clear() happens while a computation is pending, we should get a removal notification.
+  @GwtIncompatible("QueuingRemovalListener")
+  public void testRemovalNotification_clearLoading() throws InterruptedException {
+    // clear() results in the removal notification for the value being loaded even if
+    // there are no loaded values in the segment, i.e. if the segment contains 0 actual values
+    testRemovalNotification_clear_0(false);
+  }
 
+  private void testRemovalNotification_clear_0(boolean withLoaded) throws
+      InterruptedException {
     final AtomicBoolean shouldWait = new AtomicBoolean(false);
     final CountDownLatch computingLatch = new CountDownLatch(1);
+    final CountDownLatch computationStarted = new CountDownLatch(1);
+    final CountDownLatch computationComplete = new CountDownLatch(1);
     CacheLoader<String, String> computingFunction = new CacheLoader<String, String>() {
       @Override public String load(String key) throws InterruptedException {
         if (shouldWait.get()) {
+          computationStarted.countDown();
           computingLatch.await();
         }
         return key;
@@ -406,15 +420,13 @@ public class CacheBuilderTest extends TestCase {
         .removalListener(listener)
         .build(computingFunction);
 
-    // seed the map, so its segment's count > 0
-    cache.getUnchecked("a");
+    if (withLoaded) {
+      cache.getUnchecked("a");
+    }
     shouldWait.set(true);
 
-    final CountDownLatch computationStarted = new CountDownLatch(1);
-    final CountDownLatch computationComplete = new CountDownLatch(1);
     new Thread(new Runnable() {
       @Override public void run() {
-        computationStarted.countDown();
         cache.getUnchecked("b");
         computationComplete.countDown();
       }
@@ -429,11 +441,13 @@ public class CacheBuilderTest extends TestCase {
     computationComplete.await();
 
     // invalidateAll() clears both the existing value (a) and the value being loaded (b)
-    assertEquals(2, listener.size());
+    assertEquals(withLoaded ? 2 : 1, listener.size());
     RemovalNotification<String, String> notification = listener.remove();
-    assertEquals("a", notification.getKey());
-    assertEquals("a", notification.getValue());
-    notification = listener.remove();
+    if (withLoaded) {
+      assertEquals("a", notification.getKey());
+      assertEquals("a", notification.getValue());
+      notification = listener.remove();
+    }
     assertEquals("b", notification.getKey());
     assertEquals("b", notification.getValue());
     assertEquals(0, cache.size());
