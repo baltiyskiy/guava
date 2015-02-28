@@ -392,7 +392,7 @@ public class CacheBuilderTest extends TestCase {
   }
 
   @GwtIncompatible("QueuingRemovalListener")
-  public void testRemovalNotification_clearLoading() throws InterruptedException {
+  public void testRemovalNotification_clear_loading() throws InterruptedException {
     // clear() results in the removal notification for the value being loaded even if
     // there are no loaded values in the segment, i.e. if the segment contains 0 actual values
     testRemovalNotification_clear_0(false);
