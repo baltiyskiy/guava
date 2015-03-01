@@ -32,6 +32,7 @@ import com.google.common.base.Ticker;
 import com.google.common.cache.TestingRemovalListeners.CountingRemovalListener;
 import com.google.common.cache.TestingRemovalListeners.QueuingRemovalListener;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.testing.NullPointerTester;
 
@@ -40,9 +41,14 @@ import junit.framework.TestCase;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -631,6 +637,75 @@ public class CacheBuilderTest extends TestCase {
     LocalCache<?, ?> map = CacheTesting.toLocalCache(cache);
     assertEquals(4, map.segments.length); // concurrency level
     assertEquals(4, map.segments[0].table.length()); // capacity / conc level
+  }
+
+  @GwtIncompatible("CacheTesting")
+  public void testModCountWhenLoadingValueRemoved_isEmpty() {
+    int nThreads = 40;
+    int nSegments = 4;
+    int nAllTasks = 5000;
+
+    // todo use queues
+    final CyclicBarrier computationStarted = new CyclicBarrier(2);
+    final CyclicBarrier computingBarrier = new CyclicBarrier(2);
+    final CyclicBarrier computationComplete = new CyclicBarrier(2);
+    CacheLoader<String, String> computingFunction = new CacheLoader<String, String>() {
+      @Override public String load(String key) throws InterruptedException, BrokenBarrierException {
+        computationStarted.await();
+        computingBarrier.await();
+        return key;
+      }
+    };
+
+    final LoadingCache<String, String> cache = CacheBuilder.newBuilder()
+        .concurrencyLevel(nSegments)
+        .build(computingFunction);
+
+    ExecutorService executor = Executors.newFixedThreadPool(nThreads);
+    ExecutorCompletionService service = new ExecutorCompletionService(executor);
+
+    Callable<Void> loadTask = new Callable<Void>() {
+      @Override
+      public Void call() throws Exception {
+
+      }
+    };
+
+    for (int n = 0; n < nAllTasks; ++n) {
+      if (n % 2 == 0) {
+
+      } else {
+
+      }
+    }
+
+    new Thread(new Runnable() {
+      @Override public void run() {
+        cache.getUnchecked("b");
+        computationComplete.countDown();
+      }
+    }).start();
+
+    // wait for the computingEntry to be created
+    computationStarted.await();
+    cache.invalidateAll();
+    // let the computation proceed
+    computingLatch.countDown();
+    // don't check cache.size() until we know the get("b") call is complete
+    computationComplete.await();
+
+    // invalidateAll() clears both the existing value (a) and the value being loaded (b)
+    assertEquals(withLoaded ? 2 : 1, listener.size());
+    RemovalNotification<String, String> notification = listener.remove();
+    if (withLoaded) {
+      assertEquals("a", notification.getKey());
+      assertEquals("a", notification.getValue());
+      notification = listener.remove();
+    }
+    assertEquals("b", notification.getKey());
+    assertEquals("b", notification.getValue());
+    assertEquals(0, cache.size());
+    assertEquals("b", cache.getUnchecked("b"));
   }
 
   @GwtIncompatible("CountDownLatch")
